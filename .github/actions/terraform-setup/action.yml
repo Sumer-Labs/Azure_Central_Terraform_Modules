@@ -1,0 +1,120 @@
+name: Terraform Platform Setup
+
+description: >
+  Prepares the platform-managed Terraform execution environment
+  for application infrastructure.
+
+inputs:
+  application_id:
+    description: Application identifier
+    required: true
+
+  environment:
+    description: Deployment environment
+    required: true
+
+  azure_client_id:
+    description: Azure application Service Principal client ID
+    required: true
+
+  azure_tenant_id:
+    description: Azure tenant ID
+    required: true
+
+  azure_subscription_id:
+    description: Azure subscription ID
+    required: true
+
+  terraform_version:
+    description: Terraform CLI version approved by the platform team
+    required: true
+
+runs:
+  using: composite
+
+  steps:
+
+    # --------------------------------------------------
+    # 1. Authenticate to Azure using GitHub OIDC
+    # --------------------------------------------------
+    - name: Azure Login
+      uses: azure/login@v3
+      with:
+        client-id: ${{ inputs.azure_client_id }}
+        tenant-id: ${{ inputs.azure_tenant_id }}
+        subscription-id: ${{ inputs.azure_subscription_id }}
+
+    # --------------------------------------------------
+    # 2. Configure Terraform Azure authentication
+    # --------------------------------------------------
+    - name: Configure Terraform Azure authentication
+      shell: bash
+      run: |
+        echo "ARM_USE_OIDC=true" >> "$GITHUB_ENV"
+        echo "ARM_USE_AZUREAD=true" >> "$GITHUB_ENV"
+        echo "ARM_CLIENT_ID=${{ inputs.azure_client_id }}" >> "$GITHUB_ENV"
+        echo "ARM_TENANT_ID=${{ inputs.azure_tenant_id }}" >> "$GITHUB_ENV"
+        echo "ARM_SUBSCRIPTION_ID=${{ inputs.azure_subscription_id }}" >> "$GITHUB_ENV"
+
+    # --------------------------------------------------
+    # 3. Install platform-approved Terraform version
+    # --------------------------------------------------
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform_version }}
+
+    # --------------------------------------------------
+    # 4. Prepare Terraform directory
+    # --------------------------------------------------
+    - name: Prepare Terraform directory
+      shell: bash
+      run: |
+        mkdir -p Infra
+
+    # --------------------------------------------------
+    # 5. Download platform-managed Terraform configuration
+    # --------------------------------------------------
+    - name: Materialize platform Terraform configuration
+      shell: bash
+      run: |
+        PLATFORM_REPO="https://raw.githubusercontent.com/Sumer-Labs/Azure_Central_Terraform_Modules/main"
+
+        curl -fsSL \
+          "$PLATFORM_REPO/platform/terraform/versions.tf" \
+          -o Infra/versions.tf
+
+        curl -fsSL \
+          "$PLATFORM_REPO/platform/terraform/providers.tf" \
+          -o Infra/providers.tf
+
+        curl -fsSL \
+          "$PLATFORM_REPO/platform/terraform/backend.tf" \
+          -o Infra/backend.tf
+
+    # --------------------------------------------------
+    # 6. Configure application-specific backend values
+    # --------------------------------------------------
+    - name: Configure Terraform backend
+      shell: bash
+      run: |
+        sed -i \
+          "s/{{STATE_CONTAINER}}/${{ inputs.application_id }}-tfstate/g" \
+          Infra/backend.tf
+
+        sed -i \
+          "s/{{STATE_KEY}}/${{ inputs.environment }}\/terraform.tfstate/g" \
+          Infra/backend.tf
+
+    # --------------------------------------------------
+    # 7. Display generated Terraform configuration
+    # --------------------------------------------------
+    - name: Verify Terraform setup
+      shell: bash
+      run: |
+        echo "Terraform version:"
+        terraform version
+
+        echo
+        echo "Terraform configuration:"
+        ls -la Infra
