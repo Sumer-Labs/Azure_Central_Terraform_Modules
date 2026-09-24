@@ -1,0 +1,109 @@
+name: Terraform Setup
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "GitHub environment"
+        required: true
+        type: string
+
+      application_id:
+        description: "Application identifier"
+        required: true
+        type: string
+
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+
+      AZURE_TENANT_ID:
+        required: true
+
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  setup:
+    name: Terraform Setup
+    runs-on: ubuntu-latest
+
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout application repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify Azure Authentication
+        run: |
+          az account show
+
+      - name: Prepare Terraform platform configuration
+        shell: bash
+        run: |
+          mkdir -p Infra
+
+          cat > Infra/versions.tf <<'EOF'
+          terraform {
+            required_version = ">= 1.5.0"
+
+            required_providers {
+              azurerm = {
+                source  = "hashicorp/azurerm"
+                version = "~> 4.0"
+              }
+            }
+          }
+          EOF
+
+          cat > Infra/providers.tf <<'EOF'
+          provider "azurerm" {
+            features {}
+          }
+          EOF
+
+          cat > Infra/backend.tf <<EOF
+          terraform {
+            backend "azurerm" {
+              resource_group_name  = "rg-terraform-state"
+              storage_account_name = "sumerlabsterraformstate"
+              container_name       = "${{ inputs.application_id }}-tfstate"
+              key                  = "${{ inputs.environment }}/terraform.tfstate"
+
+              use_oidc        = true
+              use_azuread_auth = true
+            }
+          }
+          EOF
+
+      - name: Configure Terraform Azure authentication
+        shell: bash
+        run: |
+          echo "ARM_USE_OIDC=true" >> "$GITHUB_ENV"
+          echo "ARM_USE_AZUREAD=true" >> "$GITHUB_ENV"
+          echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> "$GITHUB_ENV"
+          echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> "$GITHUB_ENV"
+          echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> "$GITHUB_ENV"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+
+      - name: Terraform Init
+        working-directory: Infra
+        run: terraform init
+
+      - name: Show Terraform Version
+        run: terraform version
