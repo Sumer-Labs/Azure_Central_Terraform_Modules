@@ -78,20 +78,9 @@ runs:
     - name: Materialize platform Terraform configuration
       shell: bash
       run: |
-        PLATFORM_REPO="https://raw.githubusercontent.com/Sumer-Labs/Azure_Central_Terraform_Modules/main"
-
-        curl -fsSL \
-          "$PLATFORM_REPO/platform/terraform/versions.tf" \
-          -o Infra/versions.tf
-
-        curl -fsSL \
-          "$PLATFORM_REPO/platform/terraform/providers.tf" \
-          -o Infra/providers.tf
-
-        curl -fsSL \
-          "$PLATFORM_REPO/platform/terraform/backend.tf" \
-          -o Infra/backend.tf
-
+        cp platform/platform/terraform/versions.tf Infra/versions.tf
+        cp platform/platform/terraform/providers.tf Infra/providers.tf
+        cp platform/platform/terraform/backend.tf Infra/backend.tf
     # --------------------------------------------------
     # 6. Configure application-specific backend values
     # --------------------------------------------------
