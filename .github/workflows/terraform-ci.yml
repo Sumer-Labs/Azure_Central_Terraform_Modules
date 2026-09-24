@@ -2,6 +2,21 @@ name: Terraform CI
 
 on:
   workflow_call:
+    inputs:
+      environment:
+        description: "GitHub environment to use"
+        required: true
+        type: string
+
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+
+      AZURE_TENANT_ID:
+        required: true
+
+      AZURE_SUBSCRIPTION_ID:
+        required: true
 
 permissions:
   id-token: write
@@ -12,7 +27,7 @@ jobs:
     name: Azure Authentication
     runs-on: ubuntu-latest
 
-    environment: dev-infra
+    environment: ${{ inputs.environment }}
 
     steps:
       - name: Azure Login
