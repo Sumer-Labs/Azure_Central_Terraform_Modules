@@ -13,6 +13,11 @@ on:
         required: true
         type: string
 
+      terraform_version:
+        description: Terraform CLI version approved by the platform team
+        required: true
+        type: string
+
     secrets:
       AZURE_CLIENT_ID:
         required: true
@@ -36,15 +41,25 @@ jobs:
 
     steps:
 
-      # -----------------------------------------------
-      # Checkout application repository
-      # -----------------------------------------------
+      # --------------------------------------------------
+      # 1. Checkout application repository
+      # --------------------------------------------------
       - name: Checkout application repository
         uses: actions/checkout@v4
 
-      # -----------------------------------------------
-      # Run platform Terraform setup action
-      # -----------------------------------------------
+      # --------------------------------------------------
+      # 2. Checkout central platform repository
+      # --------------------------------------------------
+      - name: Checkout platform repository
+        uses: actions/checkout@v4
+        with:
+          repository: Sumer-Labs/Azure_Central_Terraform_Modules
+          ref: main
+          path: platform
+
+      # --------------------------------------------------
+      # 3. Run Terraform platform setup
+      # --------------------------------------------------
       - name: Terraform Platform Setup
         uses: Sumer-Labs/Azure_Central_Terraform_Modules/.github/actions/terraform-setup@main
         with:
@@ -55,4 +70,4 @@ jobs:
           azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
           azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-          terraform_version: ${{ vars.TERRAFORM_VERSION }}
+          terraform_version: ${{ inputs.terraform_version }}
