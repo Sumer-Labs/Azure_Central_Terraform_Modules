@@ -22,6 +22,9 @@ on:
 
       AZURE_SUBSCRIPTION_ID:
         required: true
+      
+      PLATFORM_REPO_TOKEN:
+        required: true
 
 permissions:
   id-token: write
@@ -51,6 +54,7 @@ jobs:
           repository: Sumer-Labs/Azure_Central_Terraform_Modules
           ref: main
           path: platform
+          token: ${{ secrets.PLATFORM_REPO_TOKEN }}
 
       # --------------------------------------------------
       # 3. Run Terraform platform setup
