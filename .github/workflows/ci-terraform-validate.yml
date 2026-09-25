@@ -1,0 +1,81 @@
+name: Terraform Validate
+
+on:
+  workflow_call:
+    inputs:
+      application_id:
+        description: Application identifier
+        required: true
+        type: string
+
+      environment:
+        description: Deployment environment
+        required: true
+        type: string
+
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+
+      AZURE_TENANT_ID:
+        required: true
+
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+
+      PLATFORM_REPO_TOKEN:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+
+    environment: ${{ inputs.environment }}
+
+    steps:
+
+      # 1. Checkout application repository
+      - name: Checkout application repository
+        uses: actions/checkout@v4
+
+      # 2. Checkout platform repository
+      - name: Checkout platform repository
+        uses: actions/checkout@v4
+        with:
+          repository: Sumer-Labs/Azure_Central_Terraform_Modules
+          ref: main
+          path: platform
+          token: ${{ secrets.PLATFORM_REPO_TOKEN }}
+
+      # 3. Platform Terraform setup
+      - name: Terraform Platform Setup
+        uses: Sumer-Labs/Azure_Central_Terraform_Modules/.github/actions/terraform-setup@main
+        with:
+          application_id: ${{ inputs.application_id }}
+          environment: ${{ inputs.environment }}
+
+          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+          terraform_version: ${{ vars.TERRAFORM_VERSION }}
+
+      # 4. Terraform format check
+      - name: Terraform Format Check
+        working-directory: Infra
+        run: terraform fmt -check -recursive
+
+      # 5. Terraform initialization
+      - name: Terraform Init
+        working-directory: Infra
+        run: terraform init
+
+      # 6. Terraform validation
+      - name: Terraform Validate
+        working-directory: Infra
+        run: terraform validate
