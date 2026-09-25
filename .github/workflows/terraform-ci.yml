@@ -9,7 +9,7 @@ on:
         type: string
 
       environment:
-        description: GitHub environment
+        description: Deployment environment
         required: true
         type: string
 
@@ -22,7 +22,7 @@ on:
 
       AZURE_SUBSCRIPTION_ID:
         required: true
-      
+
       PLATFORM_REPO_TOKEN:
         required: true
 
@@ -31,42 +31,21 @@ permissions:
   contents: read
 
 jobs:
-  terraform-setup:
-    name: Terraform Platform Setup
-    runs-on: ubuntu-latest
 
-    environment: ${{ inputs.environment }}
+  # --------------------------------------------------
+  # Terraform validation
+  # --------------------------------------------------
+  validate:
+    name: Terraform Validate
 
-    steps:
+    uses: Sumer-Labs/Azure_Central_Terraform_Modules/.github/workflows/ci-terraform-validate.yml@main
 
-      # --------------------------------------------------
-      # 1. Checkout application repository
-      # --------------------------------------------------
-      - name: Checkout application repository
-        uses: actions/checkout@v4
+    with:
+      application_id: ${{ inputs.application_id }}
+      environment: ${{ inputs.environment }}
 
-      # --------------------------------------------------
-      # 2. Checkout central platform repository
-      # --------------------------------------------------
-      - name: Checkout platform repository
-        uses: actions/checkout@v4
-        with:
-          repository: Sumer-Labs/Azure_Central_Terraform_Modules
-          ref: main
-          path: platform
-          token: ${{ secrets.PLATFORM_REPO_TOKEN }}
-
-      # --------------------------------------------------
-      # 3. Run Terraform platform setup
-      # --------------------------------------------------
-      - name: Terraform Platform Setup
-        uses: Sumer-Labs/Azure_Central_Terraform_Modules/.github/actions/terraform-setup@main
-        with:
-          application_id: ${{ inputs.application_id }}
-          environment: ${{ inputs.environment }}
-
-          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
-          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-          azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-          terraform_version: ${{ vars.terraform_version }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      PLATFORM_REPO_TOKEN: ${{ secrets.PLATFORM_REPO_TOKEN }}
