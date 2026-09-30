@@ -78,6 +78,6 @@ jobs:
         run: |
           opa eval \
             --format pretty \
-            --data ../platform/Policy As code/terraform \
+            --data "../Policy As code/terraform" \
             --input tfplan.json \
             "data.terraform.deny"
