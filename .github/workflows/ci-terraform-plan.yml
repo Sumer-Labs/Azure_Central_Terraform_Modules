@@ -1,0 +1,106 @@
+name: Terraform Plan
+
+on:
+  workflow_call:
+    inputs:
+      application_id:
+        description: Application identifier
+        required: true
+        type: string
+
+      environment:
+        description: Deployment environment
+        required: true
+        type: string
+
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+
+      AZURE_TENANT_ID:
+        required: true
+
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+
+      PLATFORM_REPO_TOKEN:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+
+      # --------------------------------------------------
+      # Checkout Application Repository
+      # --------------------------------------------------
+      - name: Checkout application repository
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------
+      # Checkout Central Platform Repository
+      # --------------------------------------------------
+      - name: Checkout platform repository
+        uses: actions/checkout@v4
+        with:
+          repository: Sumer-Labs/Azure_Central_Terraform_Modules
+          ref: main
+          path: platform
+          token: ${{ secrets.PLATFORM_REPO_TOKEN }}
+
+      # --------------------------------------------------
+      # Platform Terraform Setup
+      # --------------------------------------------------
+      - name: Terraform Platform Setup
+        uses: Sumer-Labs/Azure_Central_Terraform_Modules/.github/actions/terraform-setup@main
+        with:
+          application_id: ${{ inputs.application_id }}
+          environment: ${{ inputs.environment }}
+          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          terraform_version: ${{ vars.TERRAFORM_VERSION }}
+
+      # --------------------------------------------------
+      # Terraform Init
+      # --------------------------------------------------
+      - name: Terraform Init
+        working-directory: Infra
+        run: terraform init
+
+      # --------------------------------------------------
+      # Terraform Plan
+      # --------------------------------------------------
+      - name: Terraform Plan
+        working-directory: Infra
+        run: |
+          terraform plan \
+            -out=tfplan
+
+      # --------------------------------------------------
+      # Convert Plan to JSON
+      # --------------------------------------------------
+      - name: Terraform Plan JSON
+        working-directory: Infra
+        run: |
+          terraform show \
+            -json tfplan > tfplan.json
+
+      # --------------------------------------------------
+      # Upload Terraform Plan
+      # --------------------------------------------------
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: |
+            Infra/tfplan
+            Infra/tfplan.json
+          retention-days: 1
