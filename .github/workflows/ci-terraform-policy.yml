@@ -1,0 +1,83 @@
+name: Terraform Policy
+
+on:
+  workflow_call:
+    inputs:
+      application_id:
+        description: Application identifier
+        required: true
+        type: string
+
+      environment:
+        description: Deployment environment
+        required: true
+        type: string
+
+    secrets:
+      PLATFORM_REPO_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: Terraform Policy-as-Code
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # --------------------------------------------------
+      # Checkout Application Repository
+      # --------------------------------------------------
+      - name: Checkout application repository
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------
+      # Checkout Platform Repository
+      # --------------------------------------------------
+      - name: Checkout platform repository
+        uses: actions/checkout@v4
+        with:
+          repository: Sumer-Labs/Azure_Central_Terraform_Modules
+          ref: main
+          path: platform
+          token: ${{ secrets.PLATFORM_REPO_TOKEN }}
+
+      # --------------------------------------------------
+      # Download Terraform Plan
+      # --------------------------------------------------
+      - name: Download Terraform plan
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          path: Infra
+
+      # --------------------------------------------------
+      # Verify Terraform Plan
+      # --------------------------------------------------
+      - name: Verify Terraform plan
+        shell: bash
+        run: |
+          echo "Terraform plan files:"
+          ls -la Infra
+
+      # --------------------------------------------------
+      # Setup OPA
+      # --------------------------------------------------
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: latest
+
+      # --------------------------------------------------
+      # Run Policy-as-Code
+      # --------------------------------------------------
+      - name: Run Terraform Policy
+        working-directory: Infra
+        run: |
+          opa eval \
+            --format pretty \
+            --data ../platform/policies/terraform \
+            --input tfplan.json \
+            "data.terraform.deny"
