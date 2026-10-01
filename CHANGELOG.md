@@ -2,6 +2,15 @@
 
 All notable changes to the platform are documented in this file.
 
+## [1.2.0] - 2026-10-02
+
+### Added
+
+- Enabled GitHub immutable releases for platform releases.
+- Platform release workflow now creates releases as drafts before publishing.
+- Platform release workflow verifies the release tag points to the expected commit.
+- Platform release workflow verifies the published release is immutable.
+
 ## [1.1.0] - 2026-10-01
 
 ### Added
