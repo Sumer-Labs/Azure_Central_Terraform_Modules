@@ -53,8 +53,6 @@ jobs:
       - name: Check whether release already exists
         id: release_check
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           TAG="platform-v${VERSION}"
@@ -85,7 +83,7 @@ jobs:
 
           echo "sha=$MAIN_SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Create platform release
+      - name: Create draft platform release
         if: steps.release_check.outputs.skip == 'false'
         shell: bash
         env:
@@ -95,14 +93,79 @@ jobs:
           TAG="platform-v${VERSION}"
           MAIN_SHA="${{ steps.release_commit.outputs.sha }}"
 
+          echo "Creating draft release:"
+          echo "Version : $VERSION"
+          echo "Tag     : $TAG"
+          echo "Commit  : $MAIN_SHA"
+
           gh release create "$TAG" \
             --target "$MAIN_SHA" \
             --title "Platform v${VERSION}" \
-            --notes-file CHANGELOG.md
+            --notes-file CHANGELOG.md \
+            --draft
+
+      - name: Verify release tag points to release commit
+        if: steps.release_check.outputs.skip == 'false'
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="platform-v${VERSION}"
+          EXPECTED_SHA="${{ steps.release_commit.outputs.sha }}"
+
+          echo "Fetching release tag..."
+          git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}"
+
+          ACTUAL_SHA=$(git rev-list -n 1 "$TAG")
+
+          echo "Expected commit: $EXPECTED_SHA"
+          echo "Actual commit:   $ACTUAL_SHA"
+
+          if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "ERROR: Release tag does not point to the expected commit."
+            exit 1
+          fi
+
+          echo "Release tag correctly points to the expected commit."
+
+      - name: Publish immutable platform release
+        if: steps.release_check.outputs.skip == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="platform-v${VERSION}"
+
+          echo "Publishing release: $TAG"
+
+          gh release edit "$TAG" \
+            --draft=false
+
+          echo "Platform release published successfully."
+
+      - name: Verify immutable release
+        if: steps.release_check.outputs.skip == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="platform-v${VERSION}"
+
+          IMMUTABLE=$(gh release view "$TAG" --json isImmutable --jq '.isImmutable')
+
+          echo "Release:   $TAG"
+          echo "Immutable: $IMMUTABLE"
+
+          if [ "$IMMUTABLE" != "true" ]; then
+            echo "ERROR: Release was published but is not immutable."
+            exit 1
+          fi
+
+          echo "Release is confirmed immutable."
 
       - name: Display release information
         if: steps.release_check.outputs.skip == 'false'
-        shell: bash
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           TAG="platform-v${VERSION}"
@@ -111,7 +174,8 @@ jobs:
           echo "======================================"
           echo "Platform Release Created"
           echo "======================================"
-          echo "Version : $VERSION"
-          echo "Tag     : $TAG"
-          echo "Commit  : $MAIN_SHA"
+          echo "Version   : $VERSION"
+          echo "Tag       : $TAG"
+          echo "Commit    : $MAIN_SHA"
+          echo "Immutable : true"
           echo "======================================"
