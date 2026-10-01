@@ -73,6 +73,11 @@ jobs:
       # --------------------------------------------------
       # 4. Terraform tests
       # --------------------------------------------------
+
+      - name: Terraform Init
+        working-directory: Infra
+        run: terraform init
+
       - name: Terraform Test
         working-directory: Infra
         run: terraform test
