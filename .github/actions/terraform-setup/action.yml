@@ -29,6 +29,10 @@ inputs:
     description: Terraform CLI version approved by the platform team
     required: true
 
+  platform_repo_token:
+    description: GitHub token used to access the private platform repository
+    required: true
+
 runs:
   using: composite
 
@@ -65,7 +69,16 @@ runs:
         terraform_version: ${{ inputs.terraform_version }}
 
     # --------------------------------------------------
-    # 4. Prepare Terraform directory
+    # 4. Prepare the Repo Token
+    # --------------------------------------------------
+    - name: Prepare the Repo Token
+      shell: bash
+      run: |
+        git config --global \
+          url."https://x-access-token:${{ inputs.platform_repo_token }}@github.com/".insteadOf \
+          "https://github.com/"
+    # --------------------------------------------------
+    # 5. Prepare Terraform directory
     # --------------------------------------------------
     - name: Prepare Terraform directory
       shell: bash
@@ -73,7 +86,7 @@ runs:
         mkdir -p Infra
 
     # --------------------------------------------------
-    # 5. Download platform-managed Terraform configuration
+    # 6. Download platform-managed Terraform configuration
     # --------------------------------------------------
     - name: Materialize platform Terraform configuration
       shell: bash
@@ -82,7 +95,7 @@ runs:
         cp platform/platform/terraform/providers.tf Infra/providers.tf
         cp platform/platform/terraform/backend.tf Infra/backend.tf
     # --------------------------------------------------
-    # 6. Configure application-specific backend values
+    # 7. Configure application-specific backend values
     # --------------------------------------------------
     - name: Configure Terraform backend
       shell: bash
@@ -96,7 +109,7 @@ runs:
           Infra/backend.tf
 
     # --------------------------------------------------
-    # 7. Display generated Terraform configuration
+    # 8. Display generated Terraform configuration
     # --------------------------------------------------
     - name: Verify Terraform setup
       shell: bash
