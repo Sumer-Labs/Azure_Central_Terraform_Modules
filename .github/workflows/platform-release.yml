@@ -21,42 +21,50 @@ jobs:
       name: platform-release
 
     steps:
+
+      # ------------------------------------------------------------
+      # 1. Checkout platform repository
+      # ------------------------------------------------------------
       - name: Checkout platform repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # ------------------------------------------------------------
+      # 2. Determine release version from CHANGELOG
+      # ------------------------------------------------------------
       - name: Determine release version
-        if: steps.release_check.outputs.skip == 'false'
-        id: release_commit
+        id: version
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          TAG="platform-v${VERSION}"
+          VERSION=$(grep -m1 -oP '^## \[\K[0-9]+\.[0-9]+\.[0-9]+(?=\])' CHANGELOG.md || true)
 
-          if [ "${{ steps.release_check.outputs.existing_draft }}" = "true" ]; then
-            RELEASE_SHA=$(gh release view "$TAG" \
-              --json targetCommitish \
-              --jq '.targetCommitish')
-
-            echo "Existing draft release detected."
-            echo "Original release commit: $RELEASE_SHA"
-          else
-            RELEASE_SHA=$(git rev-parse HEAD)
-
-            echo "New release detected."
-            echo "Current release commit: $RELEASE_SHA"
-          fi
-
-          if [ -z "$RELEASE_SHA" ]; then
-            echo "ERROR: Could not determine release commit."
+          if [ -z "$VERSION" ]; then
+            echo "No valid release version found in CHANGELOG.md"
             exit 1
           fi
 
-          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Detected release version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      # ------------------------------------------------------------
+      # 3. Validate release version
+      # ------------------------------------------------------------
+      - name: Validate release version
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release version: $VERSION"
+            exit 1
+          fi
+
+          echo "Release version format is valid: $VERSION"
+
+      # ------------------------------------------------------------
+      # 4. Check whether release already exists
+      # ------------------------------------------------------------
       - name: Check whether release already exists
         id: release_check
         shell: bash
@@ -74,59 +82,106 @@ jobs:
 
             if [ "$IS_DRAFT" = "true" ]; then
               echo "A draft release exists. Continuing with verification."
+
               echo "skip=false" >> "$GITHUB_OUTPUT"
               echo "existing_draft=true" >> "$GITHUB_OUTPUT"
             else
               echo "Release is already published."
+
               echo "skip=true" >> "$GITHUB_OUTPUT"
               echo "existing_draft=false" >> "$GITHUB_OUTPUT"
             fi
           else
             echo "Release $TAG does not exist."
+
             echo "skip=false" >> "$GITHUB_OUTPUT"
             echo "existing_draft=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # ------------------------------------------------------------
+      # 5. Stop if release is already published
+      # ------------------------------------------------------------
       - name: Stop if release already exists
         if: steps.release_check.outputs.skip == 'true'
         run: |
           echo "Platform release already exists."
           echo "No new release will be created."
 
+      # ------------------------------------------------------------
+      # 6. Determine release commit
+      #
+      # New release:
+      #   Use current workflow commit.
+      #
+      # Existing draft:
+      #   Reuse the original draft release commit.
+      # ------------------------------------------------------------
       - name: Determine release commit
-        if: steps.release_check.outputs.skip == 'false' 
+        if: steps.release_check.outputs.skip == 'false'
         id: release_commit
-        shell: bash
-        run: |
-          MAIN_SHA=$(git rev-parse HEAD)
-
-          echo "Release commit:"
-          echo "$MAIN_SHA"
-
-          echo "sha=$MAIN_SHA" >> "$GITHUB_OUTPUT"
-
-      - name: Create draft platform release
-        if: steps.release_check.outputs.skip == 'false'  && steps.release_check.outputs.existing_draft != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           TAG="platform-v${VERSION}"
-          MAIN_SHA="${{ steps.release_commit.outputs.sha }}"
+
+          if [ "${{ steps.release_check.outputs.existing_draft }}" = "true" ]; then
+
+            RELEASE_SHA=$(gh release view "$TAG" \
+              --json targetCommitish \
+              --jq '.targetCommitish')
+
+            echo "Existing draft release detected."
+            echo "Original release commit: $RELEASE_SHA"
+
+          else
+
+            RELEASE_SHA=$(git rev-parse HEAD)
+
+            echo "New release detected."
+            echo "Current release commit: $RELEASE_SHA"
+
+          fi
+
+          if [ -z "$RELEASE_SHA" ]; then
+            echo "ERROR: Could not determine release commit."
+            exit 1
+          fi
+
+          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------
+      # 7. Create draft platform release
+      #
+      # Only runs when there is NO existing draft.
+      # ------------------------------------------------------------
+      - name: Create draft platform release
+        if: |
+          steps.release_check.outputs.skip == 'false' &&
+          steps.release_check.outputs.existing_draft != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="platform-v${VERSION}"
+          RELEASE_SHA="${{ steps.release_commit.outputs.sha }}"
 
           echo "Creating draft release:"
           echo "Version : $VERSION"
           echo "Tag     : $TAG"
-          echo "Commit  : $MAIN_SHA"
+          echo "Commit  : $RELEASE_SHA"
 
           gh release create "$TAG" \
-            --target "$MAIN_SHA" \
+            --target "$RELEASE_SHA" \
             --title "Platform v${VERSION}" \
             --notes-file CHANGELOG.md \
             --draft
 
-      
+      # ------------------------------------------------------------
+      # 8. Publish platform release
+      # ------------------------------------------------------------
       - name: Publish immutable platform release
         if: steps.release_check.outputs.skip == 'false'
         shell: bash
@@ -143,6 +198,9 @@ jobs:
 
           echo "Platform release published successfully."
 
+      # ------------------------------------------------------------
+      # 9. Verify release tag points to expected commit
+      # ------------------------------------------------------------
       - name: Verify release tag points to release commit
         if: steps.release_check.outputs.skip == 'false'
         shell: bash
@@ -152,7 +210,9 @@ jobs:
           EXPECTED_SHA="${{ steps.release_commit.outputs.sha }}"
 
           echo "Fetching release tag..."
-          git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}"
+
+          git fetch origin \
+            "refs/tags/${TAG}:refs/tags/${TAG}"
 
           ACTUAL_SHA=$(git rev-list -n 1 "$TAG")
 
@@ -166,7 +226,9 @@ jobs:
 
           echo "Release tag correctly points to the expected commit."
 
-
+      # ------------------------------------------------------------
+      # 10. Verify GitHub immutable release
+      # ------------------------------------------------------------
       - name: Verify immutable release
         if: steps.release_check.outputs.skip == 'false'
         shell: bash
@@ -176,7 +238,9 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           TAG="platform-v${VERSION}"
 
-          IMMUTABLE=$(gh release view "$TAG" --json isImmutable --jq '.isImmutable')
+          IMMUTABLE=$(gh release view "$TAG" \
+            --json isImmutable \
+            --jq '.isImmutable')
 
           echo "Release:   $TAG"
           echo "Immutable: $IMMUTABLE"
@@ -188,18 +252,21 @@ jobs:
 
           echo "Release is confirmed immutable."
 
+      # ------------------------------------------------------------
+      # 11. Display release information
+      # ------------------------------------------------------------
       - name: Display release information
         if: steps.release_check.outputs.skip == 'false'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           TAG="platform-v${VERSION}"
-          MAIN_SHA="${{ steps.release_commit.outputs.sha }}"
+          RELEASE_SHA="${{ steps.release_commit.outputs.sha }}"
 
           echo "======================================"
           echo "Platform Release Created"
           echo "======================================"
           echo "Version   : $VERSION"
           echo "Tag       : $TAG"
-          echo "Commit    : $MAIN_SHA"
+          echo "Commit    : $RELEASE_SHA"
           echo "Immutable : true"
           echo "======================================"
