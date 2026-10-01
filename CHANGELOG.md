@@ -2,6 +2,13 @@
 
 All notable changes to the platform are documented in this file.
 
+## [1.3.0] - 2026-10-02
+
+### Changed
+
+- Improved platform release workflow commit verification.
+- Existing draft releases now reuse their original release commit during verification.
+
 ## [1.2.0] - 2026-10-02
 
 ### Added
