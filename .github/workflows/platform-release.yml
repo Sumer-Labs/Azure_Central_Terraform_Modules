@@ -87,7 +87,7 @@ jobs:
           echo "No new release will be created."
 
       - name: Determine release commit
-        if: steps.release_check.outputs.skip == 'false'
+        if: steps.release_check.outputs.skip == 'false' 
         id: release_commit
         shell: bash
         run: |
@@ -99,7 +99,7 @@ jobs:
           echo "sha=$MAIN_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Create draft platform release
-        if: steps.release_check.outputs.skip == 'false'
+        if: steps.release_check.outputs.skip == 'false'  && steps.release_check.outputs.existing_draft != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -118,6 +118,23 @@ jobs:
             --title "Platform v${VERSION}" \
             --notes-file CHANGELOG.md \
             --draft
+
+      
+      - name: Publish immutable platform release
+        if: steps.release_check.outputs.skip == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="platform-v${VERSION}"
+
+          echo "Publishing release: $TAG"
+
+          gh release edit "$TAG" \
+            --draft=false
+
+          echo "Platform release published successfully."
 
       - name: Verify release tag points to release commit
         if: steps.release_check.outputs.skip == 'false'
@@ -142,21 +159,6 @@ jobs:
 
           echo "Release tag correctly points to the expected commit."
 
-      - name: Publish immutable platform release
-        if: steps.release_check.outputs.skip == 'false'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          TAG="platform-v${VERSION}"
-
-          echo "Publishing release: $TAG"
-
-          gh release edit "$TAG" \
-            --draft=false
-
-          echo "Platform release published successfully."
 
       - name: Verify immutable release
         if: steps.release_check.outputs.skip == 'false'
