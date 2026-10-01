@@ -27,30 +27,35 @@ jobs:
           fetch-depth: 0
 
       - name: Determine release version
-        id: version
+        if: steps.release_check.outputs.skip == 'false'
+        id: release_commit
         shell: bash
-        run: |
-          VERSION=$(grep -m1 -oP '^## \[\K[0-9]+\.[0-9]+\.[0-9]+(?=\])' CHANGELOG.md || true)
-
-          if [ -z "$VERSION" ]; then
-            echo "No valid release version found in CHANGELOG.md"
-            exit 1
-          fi
-
-          echo "Detected release version: $VERSION"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Validate release version
-        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          TAG="platform-v${VERSION}"
 
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid release version: $VERSION"
+          if [ "${{ steps.release_check.outputs.existing_draft }}" = "true" ]; then
+            RELEASE_SHA=$(gh release view "$TAG" \
+              --json targetCommitish \
+              --jq '.targetCommitish')
+
+            echo "Existing draft release detected."
+            echo "Original release commit: $RELEASE_SHA"
+          else
+            RELEASE_SHA=$(git rev-parse HEAD)
+
+            echo "New release detected."
+            echo "Current release commit: $RELEASE_SHA"
+          fi
+
+          if [ -z "$RELEASE_SHA" ]; then
+            echo "ERROR: Could not determine release commit."
             exit 1
           fi
 
-          echo "Release version format is valid: $VERSION"
+          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Check whether release already exists
         id: release_check
