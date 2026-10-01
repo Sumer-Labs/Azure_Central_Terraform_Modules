@@ -1,0 +1,117 @@
+name: Platform Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - CHANGELOG.md
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Platform Release
+    runs-on: ubuntu-latest
+
+    environment:
+      name: platform-release
+
+    steps:
+      - name: Checkout platform repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine release version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(grep -m1 -oP '^## \[\K[0-9]+\.[0-9]+\.[0-9]+(?=\])' CHANGELOG.md || true)
+
+          if [ -z "$VERSION" ]; then
+            echo "No valid release version found in CHANGELOG.md"
+            exit 1
+          fi
+
+          echo "Detected release version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Validate release version
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release version: $VERSION"
+            exit 1
+          fi
+
+          echo "Release version format is valid: $VERSION"
+
+      - name: Check whether release already exists
+        id: release_check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="platform-v${VERSION}"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag $TAG does not exist."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stop if release already exists
+        if: steps.release_check.outputs.skip == 'true'
+        run: |
+          echo "Platform release already exists."
+          echo "No new release will be created."
+
+      - name: Determine release commit
+        if: steps.release_check.outputs.skip == 'false'
+        id: release_commit
+        shell: bash
+        run: |
+          MAIN_SHA=$(git rev-parse HEAD)
+
+          echo "Release commit:"
+          echo "$MAIN_SHA"
+
+          echo "sha=$MAIN_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Create platform release
+        if: steps.release_check.outputs.skip == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="platform-v${VERSION}"
+          MAIN_SHA="${{ steps.release_commit.outputs.sha }}"
+
+          gh release create "$TAG" \
+            --target "$MAIN_SHA" \
+            --title "Platform v${VERSION}" \
+            --notes-file CHANGELOG.md
+
+      - name: Display release information
+        if: steps.release_check.outputs.skip == 'false'
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="platform-v${VERSION}"
+          MAIN_SHA="${{ steps.release_commit.outputs.sha }}"
+
+          echo "======================================"
+          echo "Platform Release Created"
+          echo "======================================"
+          echo "Version : $VERSION"
+          echo "Tag     : $TAG"
+          echo "Commit  : $MAIN_SHA"
+          echo "======================================"
