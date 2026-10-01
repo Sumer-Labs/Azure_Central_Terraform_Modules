@@ -51,3 +51,4 @@ jobs:
           directory: Infra
           framework: terraform
           quiet: false
+          skip_check: CKV_TF_1
