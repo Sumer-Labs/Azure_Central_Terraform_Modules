@@ -53,16 +53,31 @@ jobs:
       - name: Check whether release already exists
         id: release_check
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           TAG="platform-v${VERSION}"
 
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq '.isDraft')
+
+            echo "Release $TAG already exists."
+            echo "Draft status: $IS_DRAFT"
+
+            if [ "$IS_DRAFT" = "true" ]; then
+              echo "A draft release exists. Continuing with verification."
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+              echo "existing_draft=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "Release is already published."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "existing_draft=false" >> "$GITHUB_OUTPUT"
+            fi
           else
-            echo "Tag $TAG does not exist."
+            echo "Release $TAG does not exist."
             echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "existing_draft=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Stop if release already exists
