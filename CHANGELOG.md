@@ -2,6 +2,23 @@
 
 All notable changes to the platform are documented in this file.
 
+## [1.1.0] - 2026-10-01
+
+### Added
+
+- Automated platform release workflow.
+- Automatic platform version detection from CHANGELOG.md.
+- Automatic creation of platform Git tags and GitHub Releases.
+- Automatic mapping of platform release tags to the exact Git commit.
+- Platform release environment.
+
+### Platform Release
+
+- Release format: `platform-v<MAJOR>.<MINOR>.<PATCH>`.
+- Platform releases are automatically created when a new version is merged to `main`.
+- Application teams consume the platform using the platform release tag.
+- Application teams do not need to manage commit SHAs.
+
 ## [1.0.0] - 2026-10-01
 
 ### Added
