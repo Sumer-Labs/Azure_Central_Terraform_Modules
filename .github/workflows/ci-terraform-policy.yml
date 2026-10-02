@@ -75,9 +75,32 @@ jobs:
       # --------------------------------------------------
       - name: Run Terraform Policy
         working-directory: Infra
+        shell: bash
         run: |
-          opa eval \
-            --format pretty \
+          RESULT=$(opa eval \
+            --format=json \
             --data "../platform/Policy As code/terraform" \
             --input tfplan.json \
-            "data.terraform.deny"
+            "data.terraform.deny")
+
+          echo "$RESULT" | jq .
+
+          DENY_COUNT=$(echo "$RESULT" | jq \
+            '.result[0].expressions[0].value | length')
+
+          echo ""
+          echo "Policy violations: $DENY_COUNT"
+
+          if [ "$DENY_COUNT" -gt 0 ]; then
+            echo ""
+            echo "❌ Terraform Policy-as-Code validation failed."
+            echo ""
+
+            echo "$RESULT" | jq -r \
+              '.result[0].expressions[0].value[]'
+
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ Terraform Policy-as-Code validation passed."
