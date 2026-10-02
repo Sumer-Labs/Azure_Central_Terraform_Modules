@@ -1,0 +1,78 @@
+name: Platform PR
+
+on:
+  workflow_call:
+    inputs:
+      application_id:
+        description: Application identifier
+        required: true
+        type: string
+
+      environment:
+        description: Deployment environment
+        required: true
+        type: string
+
+      base_sha:
+        description: Base commit SHA of the pull request
+        required: true
+        type: string
+
+      head_sha:
+        description: Head commit SHA of the pull request
+        required: true
+        type: string
+
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+
+      AZURE_TENANT_ID:
+        required: true
+
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+
+      PLATFORM_REPO_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+
+  # --------------------------------------------------
+  # Detect Terraform changes
+  # --------------------------------------------------
+  detect-terraform:
+    name: Detect Terraform Changes
+    runs-on: ubuntu-latest
+
+    outputs:
+      terraform_changed: ${{ steps.detect.outputs.terraform_changed }}
+
+    steps:
+
+      - name: Checkout application repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout platform repository
+        uses: actions/checkout@v4
+        with:
+          repository: Sumer-Labs/Azure_Central_Terraform_Modules
+          ref: main
+          path: platform
+          token: ${{ secrets.PLATFORM_REPO_TOKEN }}
+
+      - name: Detect Terraform changes
+        id: detect
+        shell: bash
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+        run: |
+          chmod +x platform/.github/scripts/detect-terraform-changes.sh
+
+          platform/.github/scripts/detect-terraform-changes.sh
