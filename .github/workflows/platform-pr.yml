@@ -37,6 +37,7 @@ on:
         required: true
 
 permissions:
+  id-token: write
   contents: read
 
 jobs:
@@ -76,3 +77,77 @@ jobs:
           chmod +x platform/.github/scripts/detect-terraform-changes.sh
 
           platform/.github/scripts/detect-terraform-changes.sh
+
+
+  # --------------------------------------------------
+  # Terraform CI
+  # --------------------------------------------------
+  terraform-ci:
+    name: Terraform CI
+    needs: detect-terraform
+
+    if: ${{ needs.detect-terraform.outputs.terraform_changed == 'true' }}
+
+    uses: Sumer-Labs/Azure_Central_Terraform_Modules/.github/workflows/terraform-ci.yml@main
+
+    with:
+      application_id: ${{ inputs.application_id }}
+      environment: ${{ inputs.environment }}
+
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      PLATFORM_REPO_TOKEN: ${{ secrets.PLATFORM_REPO_TOKEN }}
+
+
+  # --------------------------------------------------
+  # Platform PR Gate
+  # --------------------------------------------------
+  platform-pr-gate:
+    name: Platform PR Gate
+
+    needs:
+      - detect-terraform
+      - terraform-ci
+
+    if: ${{ always() }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Evaluate Platform PR
+        shell: bash
+        run: |
+          echo "======================================"
+          echo "Platform PR Gate"
+          echo "======================================"
+
+          echo "Terraform Changed : ${{ needs.detect-terraform.outputs.terraform_changed }}"
+          echo "Terraform CI      : ${{ needs.terraform-ci.result }}"
+
+          echo "======================================"
+
+          if [[ "${{ needs.detect-terraform.outputs.terraform_changed }}" == "true" ]]; then
+
+            if [[ "${{ needs.terraform-ci.result }}" != "success" ]]; then
+              echo ""
+              echo "❌ Platform PR Gate FAILED."
+              echo "Terraform changes were detected but Terraform CI did not pass."
+              exit 1
+            fi
+
+            echo ""
+            echo "✅ Terraform CI passed."
+
+          else
+
+            echo ""
+            echo "ℹ️ No Terraform changes detected."
+            echo "Terraform CI is not required for this PR."
+
+          fi
+
+          echo ""
+          echo "✅ Platform PR Gate PASSED."
