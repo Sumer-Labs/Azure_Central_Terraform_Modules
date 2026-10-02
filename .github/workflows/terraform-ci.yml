@@ -116,3 +116,53 @@ jobs:
 
     secrets:
       PLATFORM_REPO_TOKEN: ${{ secrets.PLATFORM_REPO_TOKEN }}
+
+
+# --------------------------------------------------
+# Terraform CI Gate
+# --------------------------------------------------
+  ci-gate:
+    name: Terraform CI Gate
+
+    needs:
+      - validate
+      - test
+      - security
+      - plan
+      - policy
+
+    if: ${{ always() }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Evaluate Terraform CI results
+        shell: bash
+        run: |
+          echo "======================================"
+          echo "Terraform CI Gate"
+          echo "======================================"
+
+          echo "Validate : ${{ needs.validate.result }}"
+          echo "Test     : ${{ needs.test.result }}"
+          echo "Security : ${{ needs.security.result }}"
+          echo "Plan     : ${{ needs.plan.result }}"
+          echo "Policy   : ${{ needs.policy.result }}"
+
+          echo "======================================"
+
+          if [[ "${{ needs.validate.result }}" != "success" ||
+                "${{ needs.test.result }}" != "success" ||
+                "${{ needs.security.result }}" != "success" ||
+                "${{ needs.plan.result }}" != "success" ||
+                "${{ needs.policy.result }}" != "success" ]]; then
+
+            echo "❌ Terraform CI Gate FAILED."
+            echo "One or more Terraform CI checks did not pass."
+
+            exit 1
+          fi
+
+          echo "✅ Terraform CI Gate PASSED."
+          echo "All Terraform CI checks passed successfully."
