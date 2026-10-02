@@ -84,7 +84,15 @@ jobs:
         run: |
           terraform plan \
             -out=tfplan
+            -input=false \
+            -no-color
 
+
+      - name: Display Terraform Plan
+        working-directory: Infra
+        run: |
+          terraform show -no-color tfplan
+          
       # --------------------------------------------------
       # Convert Plan to JSON
       # --------------------------------------------------
